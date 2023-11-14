@@ -22,7 +22,7 @@ Group 29
 #define RES_BITS 10
 
 //motor duty cycle target for full on
-#define M_ON_TGT 1023
+#define KP 10
 
 const char* ssid = "TP-Link_E0C8";
 const char* pass = "52665134";
@@ -30,21 +30,26 @@ IPAddress src_IP(192, 168, 0, 154);
 HTML510Server h(80);
 
 //m1, m2 encoder derived velocities in terms of ledc duty cycle
-float m1_speed = 0, m2_speed = 0;
+int m1_p = 0, m2_p = 0;
 int m1_rise_time = 0, m2_rise_time = 0;
+int m_tgt_ms = 0;
+
+int m1_duty = 1023, m2_duty = 1023;
+bool stopped = true;
 
 void handleRoot(){
   h.sendhtml(body);
 }
 
-int feedback_control(int desired, float current) {
+int feedback_control(int desired, int current) {
   //TODO use m1_speed, m2_speed and tgt to adjust ledc cycle
-  return desired;
+  return (desired-current) * KP;
 }
 
 void stop() {
   ledcWrite(0, 0);
   ledcWrite(1, 0);
+  stopped = true;
 }
 
 void turn() {
@@ -57,8 +62,12 @@ void turn() {
   digitalWrite(M2_H2_PIN, 1-dir);
 
   //set duty cycle speeds from feedback control
-  ledcWrite(0, feedback_control(M_ON_TGT, m1_speed));
-  ledcWrite(1, feedback_control(M_ON_TGT, m2_speed));
+  m_tgt_ms = 15;
+  m1_duty = 1023;
+  m2_duty = 1023;
+  ledcWrite(0, m1_duty);
+  ledcWrite(1, m2_duty);
+  stopped = false;
 }
 
 void straight() {
@@ -70,18 +79,22 @@ void straight() {
   digitalWrite(M2_H2_PIN, dir);
 
   //set duty cycle speeds from feedback control
-  ledcWrite(0, feedback_control(M_ON_TGT, m1_speed));
-  ledcWrite(1, feedback_control(M_ON_TGT, m2_speed));
+  m_tgt_ms = 15;
+  m1_duty = 1023;
+  m2_duty = 1023;
+  ledcWrite(0, m1_duty);
+  ledcWrite(1, m2_duty);
+  stopped = false;
 }
 
 void IRAM_ATTR handleM1Int() {
   if (digitalRead(M1_ENC_PIN)) m1_rise_time = millis();
-  else m1_speed = millis() - m1_rise_time;
+  else m1_p = millis() - m1_rise_time;
 }
 
 void IRAM_ATTR handleM2Int() {
   if (digitalRead(M2_ENC_PIN)) m2_rise_time = millis();
-  else m2_speed = millis() - m2_rise_time;
+  else m2_p = millis() - m2_rise_time;
 }
 
 void setup() {
@@ -130,9 +143,39 @@ void setup() {
 // the loop function runs over and over again forever
 void loop() {
   //TODO read and translate encoder vals to m1_speed, m2_speed
-  // String enc_str = "enc1 : " + String(m1_speed) + " enc2: " + String(m2_speed);
-  // Serial.println(enc_str);
-  //write mapped res directly to ledc channel
+  // Serial.print("target:");
+  // Serial.print(m_tgt_ms);
+  // Serial.print(",");
+  // Serial.print("m1_current:");
+  // Serial.print(m1_p);
+  // Serial.print(",");
+  // Serial.print("m2_current:");
+  // Serial.print(m2_p);
+  // Serial.print(",");
+  // Serial.print("m2_duty:");
+  // Serial.print(m2_duty);
+  // Serial.print(",");
+  // Serial.print("m1_duty:");
+  // Serial.println(m1_duty);
+
+  if (!stopped) {
+    int p1 = feedback_control(m_tgt_ms, m1_p);
+    int p2 = feedback_control(m_tgt_ms, m2_p);
+    m1_duty = min(1023, max(m1_duty - p1, 0));
+    m2_duty = min(1023, max(m2_duty - p2, 0));
+    ledcWrite(0, m1_duty);
+    ledcWrite(1, m2_duty);
+    // Serial.print(",");
+    // Serial.print("m2_feedback:");
+    // Serial.print(p2);
+    // Serial.print(",");
+    // Serial.print("m1_feedback:");
+    // Serial.println(p1);
+  } else {
+    ledcWrite(0, 0);
+    ledcWrite(1, 0);
+  }
+
   h.serve();
   delay(10);
 }
