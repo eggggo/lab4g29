@@ -8,31 +8,36 @@ Group 29
 #include "webpage.h"
 
 //assumes m1 on left, m2 on right from back of bot
-#define M1_PWM_PIN 6
-#define M1_H1_PIN 18
-#define M1_H2_PIN 19
-#define M2_PWM_PIN -1
-#define M2_H1_PIN -1
-#define M2_H2_PIN -1
+#define M1_PWM_PIN 5
+#define M1_H1_PIN 10
+#define M1_H2_PIN 1
+#define M2_PWM_PIN 4
+#define M2_H1_PIN 6
+#define M2_H2_PIN 7
+
+#define M1_ENC_PIN 18
+#define M2_ENC_PIN 19
+
 #define M_FREQ 2000
 #define RES_BITS 10
 
 //motor duty cycle target for full on
 #define M_ON_TGT 1023
 
-const char* ssid = "SSID_HERE";
-const char* pass = "PASS_HERE";
-IPAddress src_IP(192, 168, 1, 154);
+const char* ssid = "TP-Link_E0C8";
+const char* pass = "52665134";
+IPAddress src_IP(192, 168, 0, 154);
 HTML510Server h(80);
 
 //m1, m2 encoder derived velocities in terms of ledc duty cycle
-int m1_speed = 0, m2_speed = 0;
+float m1_speed = 0, m2_speed = 0;
+int m1_rise_time = 0, m2_rise_time = 0;
 
 void handleRoot(){
   h.sendhtml(body);
 }
 
-int feedback_control(int desired, int current) {
+int feedback_control(int desired, float current) {
   //TODO use m1_speed, m2_speed and tgt to adjust ledc cycle
   return desired;
 }
@@ -46,10 +51,10 @@ void turn() {
   //m1 backwards, m2 forwards for left, vice versa for right
   //val param = 0 is left, 1 is right
   int dir = h.getVal();
-  digitalWrite(M1_H1_PIN, dir);
-  digitalWrite(M1_H2_PIN, 1-dir);
-  digitalWrite(M2_H1_PIN, 1-dir);
-  digitalWrite(M2_H2_PIN, dir);
+  digitalWrite(M1_H1_PIN, 1-dir);
+  digitalWrite(M1_H2_PIN, dir);
+  digitalWrite(M2_H1_PIN, dir);
+  digitalWrite(M2_H2_PIN, 1-dir);
 
   //set duty cycle speeds from feedback control
   ledcWrite(0, feedback_control(M_ON_TGT, m1_speed));
@@ -69,6 +74,16 @@ void straight() {
   ledcWrite(1, feedback_control(M_ON_TGT, m2_speed));
 }
 
+void IRAM_ATTR handleM1Int() {
+  if (digitalRead(M1_ENC_PIN)) m1_rise_time = millis();
+  else m1_speed = millis() - m1_rise_time;
+}
+
+void IRAM_ATTR handleM2Int() {
+  if (digitalRead(M2_ENC_PIN)) m2_rise_time = millis();
+  else m2_speed = millis() - m2_rise_time;
+}
+
 void setup() {
   //setup ledc with channel 0 and 1, 2khz, 10 bits res for both motors
   ledcSetup(0, M_FREQ, RES_BITS);
@@ -80,6 +95,14 @@ void setup() {
   pinMode(M1_H2_PIN, OUTPUT);
   pinMode(M2_H1_PIN, OUTPUT);
   pinMode(M2_H2_PIN, OUTPUT);
+  digitalWrite(2, HIGH);
+
+  //encoder pins
+  pinMode(M1_ENC_PIN, INPUT_PULLUP);
+  pinMode(M2_ENC_PIN, INPUT_PULLUP);
+
+  attachInterrupt(digitalPinToInterrupt(M1_ENC_PIN), handleM1Int, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(M2_ENC_PIN), handleM2Int, CHANGE);
 
   //setup udp send/receive
   Serial.begin(9600);
@@ -101,12 +124,14 @@ void setup() {
   h.attachHandler("/ ",handleRoot);
   h.attachHandler("/straight?val=", straight);
   h.attachHandler("/turn?val=",turn);
+  h.attachHandler("/stop", stop);
 }
 
 // the loop function runs over and over again forever
 void loop() {
   //TODO read and translate encoder vals to m1_speed, m2_speed
-  
+  // String enc_str = "enc1 : " + String(m1_speed) + " enc2: " + String(m2_speed);
+  // Serial.println(enc_str);
   //write mapped res directly to ledc channel
   h.serve();
   delay(10);

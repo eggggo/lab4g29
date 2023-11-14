@@ -8,12 +8,12 @@ Group 29
 #include "webpage.h"
 
 //assumes m1 on left, m2 on right from back of bot
-#define M1_PWM_PIN 6
-#define M1_H1_PIN 18
-#define M1_H2_PIN 19
-#define M2_PWM_PIN -1
-#define M2_H1_PIN -1
-#define M2_H2_PIN -1
+#define M1_PWM_PIN 5
+#define M1_H1_PIN 1
+#define M1_H2_PIN 10
+#define M2_PWM_PIN 4
+#define M2_H1_PIN 7
+#define M2_H2_PIN 6
 #define M_FREQ 2000
 #define RES_BITS 10
 
