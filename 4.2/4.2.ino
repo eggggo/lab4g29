@@ -42,10 +42,11 @@ void handleRoot(){
 }
 
 int feedback_control(int desired, int current) {
-  //TODO use m1_speed, m2_speed and tgt to adjust ledc cycle
+  //simple p controller on desired encoder tick period
   return (desired-current) * KP;
 }
 
+//stop
 void stop() {
   ledcWrite(0, 0);
   ledcWrite(1, 0);
@@ -87,6 +88,7 @@ void straight() {
   stopped = false;
 }
 
+//encoder periods per tick
 void IRAM_ATTR handleM1Int() {
   if (digitalRead(M1_ENC_PIN)) m1_rise_time = millis();
   else m1_p = millis() - m1_rise_time;
@@ -132,7 +134,7 @@ void setup() {
   Serial.print("Use this URL to connect: http://");
   Serial.print(WiFi.localIP()); Serial.println("/");
 
-  //html page handlers
+  //html page handlers(only called on transition states)
   h.begin();
   h.attachHandler("/ ",handleRoot);
   h.attachHandler("/straight?val=", straight);
@@ -142,35 +144,15 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
-  //TODO read and translate encoder vals to m1_speed, m2_speed
-  // Serial.print("target:");
-  // Serial.print(m_tgt_ms);
-  // Serial.print(",");
-  // Serial.print("m1_current:");
-  // Serial.print(m1_p);
-  // Serial.print(",");
-  // Serial.print("m2_current:");
-  // Serial.print(m2_p);
-  // Serial.print(",");
-  // Serial.print("m2_duty:");
-  // Serial.print(m2_duty);
-  // Serial.print(",");
-  // Serial.print("m1_duty:");
-  // Serial.println(m1_duty);
-
+  //continuous feedback control if in motion
   if (!stopped) {
     int p1 = feedback_control(m_tgt_ms, m1_p);
     int p2 = feedback_control(m_tgt_ms, m2_p);
+    //clamp values then write
     m1_duty = min(1023, max(m1_duty - p1, 0));
     m2_duty = min(1023, max(m2_duty - p2, 0));
     ledcWrite(0, m1_duty);
     ledcWrite(1, m2_duty);
-    // Serial.print(",");
-    // Serial.print("m2_feedback:");
-    // Serial.print(p2);
-    // Serial.print(",");
-    // Serial.print("m1_feedback:");
-    // Serial.println(p1);
   } else {
     ledcWrite(0, 0);
     ledcWrite(1, 0);
